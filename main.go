@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 
@@ -15,7 +16,6 @@ import (
 
 func main() {
 	if _, err := os.Stat("links.txt"); err == nil {
-		// read the file
 		f, err := os.Open("links.txt")
 		if err != nil {
 			log.Fatal(err)
@@ -28,9 +28,16 @@ func main() {
 			scrapeUrl(link, fetchRecipe)
 			break
 		}
-
 	} else if errors.Is(err, os.ErrNotExist) {
-		scrapeUrl("https://www.rewe.de/rezepte/", fetchAlLRecipeLinks)
+		sum := 1
+		for {
+			scrapeUrl(fmt.Sprintf("https://www.rewe.de/rezepte/?pageNumber=%d", sum), fetchAlLRecipeLinks)
+			res, err := http.Get(fmt.Sprintf("https://www.rewe.de/rezepte/?pageNumber=%d", sum+1))
+			if err != nil || res.StatusCode != 200 {
+				break
+			}
+			sum++
+		}
 	} else {
 	}
 }
@@ -47,26 +54,30 @@ func scrapeUrl(url string, dataextractorFunc func(string)) {
 	}).Start()
 }
 
-func fetchRecipe(data string) {
-	var processRecipe func(*html.Node)
-	processRecipe = func(n *html.Node) {
-		if n.Type == html.ElementNode && n.Data == "li" {
-			for c := n.FirstChild; c != nil; c = c.NextSibling {
-				if c.Type == html.ElementNode && c.Data == "span" {
-					if len(c.Attr) > 0 {
-						amount := c.Attr[0].Val
-						if c.NextSibling.Type == html.TextNode && len(c.NextSibling.Data) > 1 {
-							ingredient := c.NextSibling.Data
-							fmt.Println(amount, ingredient)
-						}
+func processRecipe(n *html.Node) {
+	if n.Type == html.ElementNode && n.Data == "li" {
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			if c.Type == html.ElementNode && c.Data == "span" {
+				if len(c.Attr) > 0 {
+					amount := c.Attr[0].Val
+					if c.NextSibling.Type == html.TextNode && len(c.NextSibling.Data) > 1 {
+						ingredient := c.NextSibling.Data
+						fmt.Println(amount, ingredient)
 					}
 				}
 			}
 		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			processRecipe(c)
-		}
 	}
+	// TODO: EXTRACT SERVING SIZE
+	if n.Type == html.ElementNode && n.Data == "span" {
+	}
+
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		processRecipe(c)
+	}
+}
+
+func fetchRecipe(data string) {
 	n, err := html.Parse(strings.NewReader(data))
 	if err != nil {
 		log.Fatal(err)
@@ -101,7 +112,6 @@ func fetchAlLRecipeLinks(data string) {
 		if n.Type == html.ElementNode && n.Data == "a" {
 			processLink(n)
 		}
-		// traverse the child nodes
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
 			processAllProduct(c)
 		}
