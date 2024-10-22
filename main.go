@@ -2,123 +2,71 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
+	"gorecipe/links"
+	"gorecipe/recipes"
 	"log"
-	"net/http"
 	"os"
-	"strings"
+	"sync"
 
 	"github.com/geziyor/geziyor"
 	"github.com/geziyor/geziyor/client"
-	"golang.org/x/net/html"
+	"golang.org/x/sync/semaphore"
 )
 
-func main() {
-	if _, err := os.Stat("links.txt"); err == nil {
-		f, err := os.Open("links.txt")
-		if err != nil {
+func LinkEntryPoint(wg *sync.WaitGroup) {
+	sem := semaphore.NewWeighted(5)
+	sum := 1
+	for sum < 100 {
+		if err := sem.Acquire(context.Background(), 1); err != nil {
 			log.Fatal(err)
 		}
-		defer f.Close()
-
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			link := scanner.Text()
-			scrapeUrl(link, fetchRecipe)
-			break
-		}
-	} else if errors.Is(err, os.ErrNotExist) {
-		sum := 1
-		for {
-			scrapeUrl(fmt.Sprintf("https://www.rewe.de/rezepte/?pageNumber=%d", sum), fetchAlLRecipeLinks)
-			res, err := http.Get(fmt.Sprintf("https://www.rewe.de/rezepte/?pageNumber=%d", sum+1))
-			if err != nil || res.StatusCode != 200 {
-				break
-			}
-			sum++
-		}
-	} else {
+		wg.Add(1)
+		go func() {
+			scrapeUrl(fmt.Sprintf("https://www.rewe.de/rezepte/?pageNumber=%d", sum), links.FetchAlLRecipeLinks, wg)
+			sem.Release(1)
+		}()
+		sum++
 	}
 }
 
-func scrapeUrl(url string, dataextractorFunc func(string)) {
+func RecipeEntryPoint(wg *sync.WaitGroup) {
+	file, err := os.Open("links.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		link := scanner.Text()
+		wg.Add(1)
+		go scrapeUrl(link, recipes.FetchRecipe, wg)
+		break
+	}
+}
+
+func main() {
+	var wg sync.WaitGroup
+	if _, err := os.Stat("links.txt"); err == nil {
+		RecipeEntryPoint(&wg)
+	} else if errors.Is(err, os.ErrNotExist) {
+		LinkEntryPoint(&wg)
+	} else {
+		log.Fatal(err)
+	}
+	wg.Wait()
+}
+
+func scrapeUrl(url string, dataextractorFunc func(string, *sync.WaitGroup), wg *sync.WaitGroup) {
 	geziyor.NewGeziyor(&geziyor.Options{
 		StartRequestsFunc: func(g *geziyor.Geziyor) {
 			g.GetRendered(url, g.Opt.ParseFunc)
 		},
 		ParseFunc: func(g *geziyor.Geziyor, r *client.Response) {
 			data := string(r.Body)
-			dataextractorFunc(data)
+			dataextractorFunc(data, wg)
 		},
 	}).Start()
-}
-
-func processRecipe(n *html.Node) {
-	if n.Type == html.ElementNode && n.Data == "li" {
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			if c.Type == html.ElementNode && c.Data == "span" {
-				if len(c.Attr) > 0 {
-					amount := c.Attr[0].Val
-					if c.NextSibling.Type == html.TextNode && len(c.NextSibling.Data) > 1 {
-						ingredient := c.NextSibling.Data
-						fmt.Println(amount, ingredient)
-					}
-				}
-			}
-		}
-	}
-	// TODO: EXTRACT SERVING SIZE
-	if n.Type == html.ElementNode && n.Data == "span" {
-	}
-
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		processRecipe(c)
-	}
-}
-
-func fetchRecipe(data string) {
-	n, err := html.Parse(strings.NewReader(data))
-	if err != nil {
-		log.Fatal(err)
-	}
-	processRecipe(n)
-}
-
-func processLink(n *html.Node) {
-	for _, a := range n.Attr {
-		if a.Key == "href" && strings.Contains(a.Val, "/rezepte/") {
-			href := a.Val
-			if !strings.Contains(href, "https://") {
-				href = "https://www.rewe.de" + href
-				f, err := os.OpenFile("links.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-				if err != nil {
-					log.Fatal(err)
-				}
-				defer f.Close()
-				_, err = f.WriteString(href)
-				_, err = f.WriteString("\n")
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		}
-	}
-}
-
-func fetchAlLRecipeLinks(data string) {
-	var processAllProduct func(*html.Node)
-	processAllProduct = func(n *html.Node) {
-		if n.Type == html.ElementNode && n.Data == "a" {
-			processLink(n)
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			processAllProduct(c)
-		}
-	}
-	n, err := html.Parse(strings.NewReader(data))
-	if err != nil {
-		log.Fatal(err)
-	}
-	processAllProduct(n)
 }
