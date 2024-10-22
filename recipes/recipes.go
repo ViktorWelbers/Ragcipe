@@ -15,16 +15,18 @@ func FetchRecipe(data string, wg *sync.WaitGroup) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = processRecipe(n)
+	recipe := Recipe{}
+	recipe, err = processRecipe(n, &recipe)
 	if err != nil {
 		log.Fatal(err)
 	}
 	wg.Done()
+	fmt.Println(recipe)
 }
 
 type Recipe struct {
+	servings    string
 	ingredients []Ingredient
-	servings    int
 }
 
 type Ingredient struct {
@@ -32,9 +34,7 @@ type Ingredient struct {
 	amount int
 }
 
-func processRecipe(n *html.Node) error {
-	var ingredients []Ingredient
-	var servings int
+func processRecipe(n *html.Node, recipe *Recipe) (Recipe, error) {
 	if n.Data == "span" {
 		for _, a := range n.Attr {
 			text := a.Val
@@ -43,11 +43,7 @@ func processRecipe(n *html.Node) error {
 				if n.NextSibling.Type == html.ElementNode && len(n.NextSibling.Data) > 1 {
 					for _, b := range n.NextSibling.Attr {
 						if b.Val == "getFormattedServingType()" {
-							servings, err := strconv.Atoi(proposedServings)
-							if err != nil {
-								return err
-							}
-							fmt.Println(servings)
+							recipe.servings = proposedServings
 						}
 					}
 				}
@@ -62,22 +58,24 @@ func processRecipe(n *html.Node) error {
 					fmt.Println(amountStr)
 					amount, err := strconv.Atoi(amountStr)
 					if err != nil {
-						return err
+						return *recipe, err
 					}
 					if c.NextSibling.Type == html.TextNode && len(c.NextSibling.Data) > 1 {
 						item := c.NextSibling.Data
-						fmt.Println(amount, item)
 						ingredient := Ingredient{item, amount}
-						ingredients = append(ingredients, ingredient)
+						recipe.ingredients = append(recipe.ingredients, ingredient)
 					}
 				}
 			}
 		}
 	}
-	if ingredients != nil && servings != 0 {
-	}
+
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		processRecipe(c)
+		recipe, err := processRecipe(c, recipe)
+		if err != nil {
+			return recipe, err
+		}
 	}
-	return nil
+
+	return *recipe, nil
 }
