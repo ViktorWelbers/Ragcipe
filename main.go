@@ -15,7 +15,6 @@ import (
 
 	"github.com/geziyor/geziyor"
 	"github.com/geziyor/geziyor/client"
-	"github.com/joho/godotenv"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -70,13 +69,6 @@ func scrapeUrl(url string, dataExtractorFunc func(string)) {
 			dataExtractorFunc(data)
 		},
 	}).Start()
-}
-
-func init() {
-	// Load .env file
-	if err := godotenv.Load(); err != nil {
-		log.Printf("No .env file found: %v", err)
-	}
 }
 
 func main() {

@@ -6,6 +6,9 @@ import (
 	"log"
 	"os"
 
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
@@ -37,6 +40,34 @@ func ConnectDB() (*sql.DB, error) {
 		return nil, err
 	}
 
+	err = runMigrations(db)
+	if err != nil {
+		return nil, err
+	}
 	log.Println("Connected to PostgreSQL!")
 	return db, nil
+}
+
+func runMigrations(db *sql.DB) error {
+	driver, err := postgres.WithInstance(db, &postgres.Config{})
+	if err != nil {
+		return err
+	}
+	pwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	m, err := migrate.NewWithDatabaseInstance(
+		fmt.Sprintf("file://%s/db/migrations", pwd),
+		"postgres",
+		driver,
+	)
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
+	if err = m.Up(); err != nil {
+		log.Fatal(err)
+	}
+	return nil
 }
