@@ -15,6 +15,7 @@ import (
 
 	"github.com/geziyor/geziyor"
 	"github.com/geziyor/geziyor/client"
+	"github.com/joho/godotenv"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -71,14 +72,21 @@ func scrapeUrl(url string, dataExtractorFunc func(string)) {
 	}).Start()
 }
 
+func init() {
+	// Load .env file
+	if err := godotenv.Load(); err != nil {
+		log.Printf("No .env file found: %v", err)
+	}
+}
+
 func main() {
 	var wg sync.WaitGroup
-	mongoClient, err := db.ConnectDB()
+	db, err := db.ConnectDB()
 	if err != nil {
 		panic(err)
 	}
 	if _, err := os.Stat("links.txt"); err == nil {
-		RecipeEntryPoint(&wg, mongoClient)
+		RecipeEntryPoint(&wg, db)
 	} else if errors.Is(err, os.ErrNotExist) {
 		LinkEntryPoint(&wg)
 	} else {
