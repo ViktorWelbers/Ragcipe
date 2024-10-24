@@ -3,8 +3,10 @@ package main
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
+	"gorecipe/db"
 	"gorecipe/links"
 	"gorecipe/recipes"
 	"log"
@@ -17,7 +19,7 @@ import (
 )
 
 func LinkEntryPoint(wg *sync.WaitGroup) {
-	sem := semaphore.NewWeighted(5)
+	sem := semaphore.NewWeighted(10)
 	sum := 1
 	for sum < 100 {
 		if err := sem.Acquire(context.Background(), 1); err != nil {
@@ -25,14 +27,18 @@ func LinkEntryPoint(wg *sync.WaitGroup) {
 		}
 		wg.Add(1)
 		go func() {
-			scrapeUrl(fmt.Sprintf("https://www.rewe.de/rezepte/?pageNumber=%d", sum), links.FetchAlLRecipeLinks, wg)
+			fetchLinks := func(s string) {
+				links.FetchAlLRecipeLinks(s, wg)
+			}
+			scrapeUrl(fmt.Sprintf("https://www.rewe.de/rezepte/?pageNumber=%d", sum), fetchLinks)
 			sem.Release(1)
 		}()
 		sum++
 	}
 }
 
-func RecipeEntryPoint(wg *sync.WaitGroup) {
+func RecipeEntryPoint(wg *sync.WaitGroup, db *sql.DB) {
+	sem := semaphore.NewWeighted(10)
 	file, err := os.Open("links.txt")
 	if err != nil {
 		log.Fatal(err)
@@ -40,33 +46,43 @@ func RecipeEntryPoint(wg *sync.WaitGroup) {
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
+		if err := sem.Acquire(context.Background(), 1); err != nil {
+			log.Fatal(err)
+		}
 		link := scanner.Text()
 		wg.Add(1)
-		go scrapeUrl(link, recipes.FetchRecipe, wg)
+		recipeFunc := func(s string) {
+			recipes.FetchRecipe(s, wg, db)
+		}
+		go scrapeUrl(link, recipeFunc)
 		break
 	}
 }
 
-func main() {
-	var wg sync.WaitGroup
-	if _, err := os.Stat("links.txt"); err == nil {
-		RecipeEntryPoint(&wg)
-	} else if errors.Is(err, os.ErrNotExist) {
-		LinkEntryPoint(&wg)
-	} else {
-		log.Fatal(err)
-	}
-	wg.Wait()
-}
-
-func scrapeUrl(url string, dataextractorFunc func(string, *sync.WaitGroup), wg *sync.WaitGroup) {
+func scrapeUrl(url string, dataExtractorFunc func(string)) {
 	geziyor.NewGeziyor(&geziyor.Options{
 		StartRequestsFunc: func(g *geziyor.Geziyor) {
 			g.GetRendered(url, g.Opt.ParseFunc)
 		},
 		ParseFunc: func(g *geziyor.Geziyor, r *client.Response) {
 			data := string(r.Body)
-			dataextractorFunc(data, wg)
+			dataExtractorFunc(data)
 		},
 	}).Start()
+}
+
+func main() {
+	var wg sync.WaitGroup
+	mongoClient, err := db.ConnectDB()
+	if err != nil {
+		panic(err)
+	}
+	if _, err := os.Stat("links.txt"); err == nil {
+		RecipeEntryPoint(&wg, mongoClient)
+	} else if errors.Is(err, os.ErrNotExist) {
+		LinkEntryPoint(&wg)
+	} else {
+		log.Fatal(err)
+	}
+	wg.Wait()
 }
