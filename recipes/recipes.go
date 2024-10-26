@@ -1,17 +1,17 @@
 package recipes
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/net/html"
 )
 
-func FetchRecipe(data string, wg *sync.WaitGroup, db *sql.DB) {
+func FetchRecipe(data string, wg *sync.WaitGroup, db *pgxpool.Pool) {
 	n, err := html.Parse(strings.NewReader(data))
 	if err != nil {
 		log.Fatal(err)
