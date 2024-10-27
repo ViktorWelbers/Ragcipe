@@ -1,17 +1,26 @@
 package recipes
 
 import (
+	"context"
 	"fmt"
+	"gorecipe/db"
 	"log"
 	"strconv"
 	"strings"
 	"sync"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/net/html"
 )
 
-func FetchRecipe(data string, wg *sync.WaitGroup, db *pgxpool.Pool) {
+
+func CreateOrGetSource(url string, source string, nqueries *db.Queries) {
+  // Check if the source already
+  url := Strings.Split(url, "/")[2]
+  queries.GetSourceByUrl(context.Background(), db.GetSourceByUrlParams{Url: url})
+  
+
+
+func FetchRecipe(data string, wg *sync.WaitGroup, queries *db.Queries) {
 	n, err := html.Parse(strings.NewReader(data))
 	if err != nil {
 		log.Fatal(err)
@@ -22,6 +31,7 @@ func FetchRecipe(data string, wg *sync.WaitGroup, db *pgxpool.Pool) {
 		log.Fatal(err)
 	}
 	fmt.Println(recipe)
+	queries.CreateRecipe(context.Background(), db.CreateRecipeParams{})
 	wg.Done()
 }
 

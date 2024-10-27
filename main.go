@@ -14,7 +14,6 @@ import (
 
 	"github.com/geziyor/geziyor"
 	"github.com/geziyor/geziyor/client"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -37,7 +36,7 @@ func LinkEntryPoint(wg *sync.WaitGroup) {
 	}
 }
 
-func RecipeEntryPoint(wg *sync.WaitGroup, db *pgxpool.Pool) {
+func RecipeEntryPoint(wg *sync.WaitGroup, queries *db.Queries) {
 	sem := semaphore.NewWeighted(10)
 	file, err := os.Open("links.txt")
 	if err != nil {
@@ -52,7 +51,7 @@ func RecipeEntryPoint(wg *sync.WaitGroup, db *pgxpool.Pool) {
 		link := scanner.Text()
 		wg.Add(1)
 		recipeFunc := func(s string) {
-			recipes.FetchRecipe(s, wg, db)
+			recipes.FetchRecipe(s, wg, queries)
 		}
 		go scrapeUrl(link, recipeFunc)
 		break
@@ -82,8 +81,9 @@ func setupDatabase() *db.Queries {
 
 func main() {
 	var wg sync.WaitGroup
+	queries := setupDatabase()
 	if _, err := os.Stat("links.txt"); err == nil {
-		RecipeEntryPoint(&wg, db)
+		RecipeEntryPoint(&wg, queries)
 	} else if errors.Is(err, os.ErrNotExist) {
 		LinkEntryPoint(&wg)
 	} else {

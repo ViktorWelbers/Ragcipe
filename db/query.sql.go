@@ -62,8 +62,8 @@ func (q *Queries) CreateInstruction(ctx context.Context, arg CreateInstructionPa
 }
 
 const createRecipe = `-- name: CreateRecipe :one
-INSERT INTO recipes (title, servings, servings_type, country_id, source_id, original_url, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO recipes (title, servings, servings_type, country_id, source_id, original_url)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, created_at, updated_at
 `
 
@@ -74,8 +74,6 @@ type CreateRecipeParams struct {
 	CountryID    pgtype.UUID
 	SourceID     pgtype.UUID
 	OriginalUrl  pgtype.Text
-	CreatedAt    pgtype.Timestamptz
-	UpdatedAt    pgtype.Timestamptz
 }
 
 type CreateRecipeRow struct {
@@ -92,8 +90,6 @@ func (q *Queries) CreateRecipe(ctx context.Context, arg CreateRecipeParams) (Cre
 		arg.CountryID,
 		arg.SourceID,
 		arg.OriginalUrl,
-		arg.CreatedAt,
-		arg.UpdatedAt,
 	)
 	var i CreateRecipeRow
 	err := row.Scan(&i.ID, &i.CreatedAt, &i.UpdatedAt)
@@ -146,4 +142,26 @@ func (q *Queries) CreateSource(ctx context.Context, arg CreateSourceParams) (pgt
 	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const getCountry = `-- name: GetCountry :one
+SELECT id, name, code FROM countries WHERE code = $1
+`
+
+func (q *Queries) GetCountry(ctx context.Context, code string) (Country, error) {
+	row := q.db.QueryRow(ctx, getCountry, code)
+	var i Country
+	err := row.Scan(&i.ID, &i.Name, &i.Code)
+	return i, err
+}
+
+const getSource = `-- name: GetSource :one
+SELECT id, name, url FROM sources WHERE name = $1
+`
+
+func (q *Queries) GetSource(ctx context.Context, name string) (Source, error) {
+	row := q.db.QueryRow(ctx, getSource, name)
+	var i Source
+	err := row.Scan(&i.ID, &i.Name, &i.Url)
+	return i, err
 }

@@ -9,8 +9,8 @@ VALUES ($1, $2)
 RETURNING id;
 
 -- name: CreateRecipe :one
-INSERT INTO recipes (title, servings, servings_type, country_id, source_id, original_url, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO recipes (title, servings, servings_type, country_id, source_id, original_url)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, created_at, updated_at;
 
 -- name: CreateIngredient :one
@@ -27,3 +27,9 @@ RETURNING recipe_id, ingredient_id;
 INSERT INTO instructions (recipe_id, step_number, instruction_text)
 VALUES ($1, $2, $3)
 RETURNING id;
+
+-- name: GetCountry :one
+SELECT id, name, code FROM countries WHERE code = $1;
+
+-- name: GetSource :one
+SELECT id, name, url FROM sources WHERE name = $1;
