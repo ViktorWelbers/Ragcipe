@@ -14,41 +14,6 @@ import (
 	"golang.org/x/net/html"
 )
 
-func CreateOrGetSourceId(link string, queries *db.Queries) (pgtype.UUID, error) {
-	rawUrl, err := url.Parse(link)
-	if err != nil {
-		return pgtype.UUID{}, err
-	}
-	host := rawUrl.Host
-	dbSource, err := queries.GetSource(context.Background(), source)
-	if err != nil {
-		return pgtype.UUID{}, err
-	}
-	if dbSource == (db.Source{}) {
-		return dbSource.ID, nil
-	}
-	uuid, err := queries.CreateSource(context.Background(), db.CreateSourceParams{Name: source, Url: host})
-	if err != nil {
-		return pgtype.UUID{}, err
-	}
-	return uuid, nil
-}
-
-func CreateOrGetCountryId(link string, queries *db.Queries) (pgtype.UUID, error) {
-	rawUrl, err := url.Parse(link)
-	if err != nil {
-		return pgtype.UUID{}, err
-	}
-	hostSlice := strings.Split(rawUrl.Host, ".")
-	countryCode := hostSlice[len(hostSlice)-1]
-	country, err := queries.GetCountry(context.Background(), countryCode)
-	if err != nil {
-		return country.ID, err
-	}
-	id, err := queries.CreateCountry(context.Background(), db.CreateCountryParams{Name: countryCode, Code: countryCode})
-	return id, err
-}
-
 type Ingredient struct {
 	Name   string
 	Amount int
@@ -76,23 +41,25 @@ func FetchRecipe(recipeUrl string, data string, wg *sync.WaitGroup, queries *db.
 	if err != nil {
 		log.Println("There was an error trying to convert servings:", recipe.servings)
 	}
-	countryId, err := CreateOrGetCountryId(recipeUrl, queries)
+	rawUrl, err := url.Parse(recipeUrl)
 	if err != nil {
 		return
 	}
-  sourceId, err := CreateOrGetSourceId(recipeUrl,
+	host := rawUrl.Hostname()
+	splitHost := strings.Split(host, ".")
+	countryCode := splitHost[len(splitHost)-1]
 	createRecipeParams := db.CreateRecipeParams{
 		Title:        "test",
 		Servings:     int32(servingsInt),
 		ServingsType: recipe.servingsType,
-		CountryID:    countryId,
-		SourceID:     sourceId,
+		CountryCode:  countryCode,
+		HostUrl:      host,
 		OriginalUrl: pgtype.Text{
 			String: recipeUrl,
 			Valid:  true,
 		},
 	}
-	queries.CreateRecipe(context.Background(), db.CreateRecipeParams{})
+	queries.CreateRecipe(context.Background(), createRecipeParams)
 	wg.Done()
 }
 
