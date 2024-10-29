@@ -11,24 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createCountry = `-- name: CreateCountry :one
-INSERT INTO countries (name, code)
-VALUES ($1, $2)
-RETURNING id
-`
-
-type CreateCountryParams struct {
-	Name string
-	Code string
-}
-
-func (q *Queries) CreateCountry(ctx context.Context, arg CreateCountryParams) (pgtype.UUID, error) {
-	row := q.db.QueryRow(ctx, createCountry, arg.Name, arg.Code)
-	var id pgtype.UUID
-	err := row.Scan(&id)
-	return id, err
-}
-
 const createIngredient = `-- name: CreateIngredient :one
 INSERT INTO ingredients (name)
 VALUES ($1)
@@ -62,7 +44,7 @@ func (q *Queries) CreateInstruction(ctx context.Context, arg CreateInstructionPa
 }
 
 const createRecipe = `-- name: CreateRecipe :one
-INSERT INTO recipes (title, servings, servings_type, country_id, source_id, original_url)
+INSERT INTO recipes (title, servings, servings_type, country_code, host_url, original_url)
 VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, created_at, updated_at
 `
@@ -71,8 +53,8 @@ type CreateRecipeParams struct {
 	Title        string
 	Servings     int32
 	ServingsType string
-	CountryID    pgtype.UUID
-	SourceID     pgtype.UUID
+	CountryCode  string
+	HostUrl      string
 	OriginalUrl  pgtype.Text
 }
 
@@ -87,8 +69,8 @@ func (q *Queries) CreateRecipe(ctx context.Context, arg CreateRecipeParams) (Cre
 		arg.Title,
 		arg.Servings,
 		arg.ServingsType,
-		arg.CountryID,
-		arg.SourceID,
+		arg.CountryCode,
+		arg.HostUrl,
 		arg.OriginalUrl,
 	)
 	var i CreateRecipeRow
@@ -123,45 +105,5 @@ func (q *Queries) CreateRecipeIngredient(ctx context.Context, arg CreateRecipeIn
 	)
 	var i CreateRecipeIngredientRow
 	err := row.Scan(&i.RecipeID, &i.IngredientID)
-	return i, err
-}
-
-const createSource = `-- name: CreateSource :one
-INSERT INTO sources (name, url)
-VALUES ($1, $2)
-RETURNING id
-`
-
-type CreateSourceParams struct {
-	Name string
-	Url  string
-}
-
-func (q *Queries) CreateSource(ctx context.Context, arg CreateSourceParams) (pgtype.UUID, error) {
-	row := q.db.QueryRow(ctx, createSource, arg.Name, arg.Url)
-	var id pgtype.UUID
-	err := row.Scan(&id)
-	return id, err
-}
-
-const getCountry = `-- name: GetCountry :one
-SELECT id, name, code FROM countries WHERE code = $1
-`
-
-func (q *Queries) GetCountry(ctx context.Context, code string) (Country, error) {
-	row := q.db.QueryRow(ctx, getCountry, code)
-	var i Country
-	err := row.Scan(&i.ID, &i.Name, &i.Code)
-	return i, err
-}
-
-const getSource = `-- name: GetSource :one
-SELECT id, name, url FROM sources WHERE name = $1
-`
-
-func (q *Queries) GetSource(ctx context.Context, name string) (Source, error) {
-	row := q.db.QueryRow(ctx, getSource, name)
-	var i Source
-	err := row.Scan(&i.ID, &i.Name, &i.Url)
 	return i, err
 }

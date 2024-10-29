@@ -8,12 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Country struct {
-	ID   pgtype.UUID
-	Name string
-	Code string
-}
-
 type Ingredient struct {
 	ID   pgtype.UUID
 	Name string
@@ -31,8 +25,8 @@ type Recipe struct {
 	Title        string
 	Servings     int32
 	ServingsType string
-	CountryID    pgtype.UUID
-	SourceID     pgtype.UUID
+	CountryCode  string
+	HostUrl      string
 	OriginalUrl  pgtype.Text
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
@@ -43,10 +37,4 @@ type RecipeIngredient struct {
 	IngredientID pgtype.UUID
 	Amount       pgtype.Numeric
 	Unit         pgtype.Text
-}
-
-type Source struct {
-	ID   pgtype.UUID
-	Name string
-	Url  string
 }

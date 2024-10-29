@@ -5,34 +5,48 @@ import (
 	"fmt"
 	"gorecipe/db"
 	"log"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/net/html"
 )
 
-
-func CreateOrGetSource(url string, source string, nqueries *db.Queries) {
-  // Check if the source already
-  url := Strings.Split(url, "/")[2]
-  queries.GetSourceByUrl(context.Background(), db.GetSourceByUrlParams{Url: url})
-  
-
-
-func FetchRecipe(data string, wg *sync.WaitGroup, queries *db.Queries) {
-	n, err := html.Parse(strings.NewReader(data))
+func CreateOrGetSourceId(link string, queries *db.Queries) (pgtype.UUID, error) {
+	rawUrl, err := url.Parse(link)
 	if err != nil {
-		log.Fatal(err)
+		return pgtype.UUID{}, err
 	}
-	recipe := Recipe{}
-	err = recipe.parseRecipe(n)
+	host := rawUrl.Host
+	dbSource, err := queries.GetSource(context.Background(), source)
 	if err != nil {
-		log.Fatal(err)
+		return pgtype.UUID{}, err
 	}
-	fmt.Println(recipe)
-	queries.CreateRecipe(context.Background(), db.CreateRecipeParams{})
-	wg.Done()
+	if dbSource == (db.Source{}) {
+		return dbSource.ID, nil
+	}
+	uuid, err := queries.CreateSource(context.Background(), db.CreateSourceParams{Name: source, Url: host})
+	if err != nil {
+		return pgtype.UUID{}, err
+	}
+	return uuid, nil
+}
+
+func CreateOrGetCountryId(link string, queries *db.Queries) (pgtype.UUID, error) {
+	rawUrl, err := url.Parse(link)
+	if err != nil {
+		return pgtype.UUID{}, err
+	}
+	hostSlice := strings.Split(rawUrl.Host, ".")
+	countryCode := hostSlice[len(hostSlice)-1]
+	country, err := queries.GetCountry(context.Background(), countryCode)
+	if err != nil {
+		return country.ID, err
+	}
+	id, err := queries.CreateCountry(context.Background(), db.CreateCountryParams{Name: countryCode, Code: countryCode})
+	return id, err
 }
 
 type Ingredient struct {
@@ -47,12 +61,47 @@ type Recipe struct {
 	instructions []string
 }
 
+func FetchRecipe(recipeUrl string, data string, wg *sync.WaitGroup, queries *db.Queries) {
+	n, err := html.Parse(strings.NewReader(data))
+	if err != nil {
+		log.Fatal(err)
+	}
+	recipe := Recipe{}
+	err = recipe.parseRecipe(n)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(recipe)
+	servingsInt, err := strconv.Atoi(recipe.servings)
+	if err != nil {
+		log.Println("There was an error trying to convert servings:", recipe.servings)
+	}
+	countryId, err := CreateOrGetCountryId(recipeUrl, queries)
+	if err != nil {
+		return
+	}
+  sourceId, err := CreateOrGetSourceId(recipeUrl,
+	createRecipeParams := db.CreateRecipeParams{
+		Title:        "test",
+		Servings:     int32(servingsInt),
+		ServingsType: recipe.servingsType,
+		CountryID:    countryId,
+		SourceID:     sourceId,
+		OriginalUrl: pgtype.Text{
+			String: recipeUrl,
+			Valid:  true,
+		},
+	}
+	queries.CreateRecipe(context.Background(), db.CreateRecipeParams{})
+	wg.Done()
+}
+
 func (recipe *Recipe) extractInstructions(n *html.Node) error {
 	if n.Type == html.ElementNode && n.Data == "div" {
 		// Check if it has the text formatting classes that indicate an instruction div
 		isInstruction := false
 		for _, attr := range n.Attr {
-			if attr.Key == "class" && strings.Contains(attr.Val, "ld-rds mt-4 self-stretch text-sm leading-5 text-gray-1000 md:text-base lg:mt-6 lg:leading-6") {
+			if attr.Key == "class" && strings.Contains(attr.Val, "ld-rds mt- self-stretch text-sm leading-5 text-gray-1000 md:text-base lg:mt-6 lg:leading-6") {
 				isInstruction = true
 				break
 			}
