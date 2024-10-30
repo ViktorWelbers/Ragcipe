@@ -51,7 +51,7 @@ func RecipeEntryPoint(wg *sync.WaitGroup, queries *db.Queries) {
 		link := scanner.Text()
 		wg.Add(1)
 		recipeFunc := func(s string) {
-			recipes.FetchRecipe(s, wg, queries)
+			recipes.FetchRecipe(link, s, wg, queries)
 		}
 		go scrapeUrl(link, recipeFunc)
 		break
