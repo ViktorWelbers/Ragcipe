@@ -18,3 +18,5 @@ INSERT INTO instructions (recipe_id, step_number, instruction_text)
 VALUES ($1, $2, $3)
 RETURNING id;
 
+-- name: GetIngredient :one
+SELECT id FROM ingredients WHERE name = $1;

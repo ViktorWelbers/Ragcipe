@@ -2,6 +2,7 @@ package recipes
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"gorecipe/db"
 	"log"
@@ -26,11 +27,40 @@ type Recipe struct {
 	instructions []string
 }
 
+func IntToNumeric(amount int) pgtype.Numeric {
+	var numeric pgtype.Numeric
+	if err := numeric.Scan(amount); err != nil {
+		log.Panic(err)
+	}
+	return numeric
+}
+
+func getIngredientIdAmountMap(ingredients []Ingredient, queries *db.Queries) (map[pgtype.UUID]int, error) {
+	ingredientMap := map[pgtype.UUID]int{}
+	for _, ingredient := range ingredients {
+		id, err := queries.GetIngredient(context.Background(), ingredient.Name)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				id, err := queries.CreateIngredient(context.Background(), ingredient.Name)
+				if err != nil {
+					return nil, err
+				}
+				ingredientMap[id] = ingredient.Amount
+			} else {
+				return nil, err
+			}
+		}
+		ingredientMap[id] = ingredient.Amount
+	}
+	return ingredientMap, nil
+}
+
 func FetchRecipe(recipeUrl string, data string, wg *sync.WaitGroup, queries *db.Queries) {
 	n, err := html.Parse(strings.NewReader(data))
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	recipe := Recipe{}
 	err = recipe.parseRecipe(n)
 	if err != nil {
@@ -48,8 +78,10 @@ func FetchRecipe(recipeUrl string, data string, wg *sync.WaitGroup, queries *db.
 	host := rawUrl.Hostname()
 	splitHost := strings.Split(host, ".")
 	countryCode := splitHost[len(splitHost)-1]
+	urlSlice := strings.Split(strings.TrimSuffix(recipeUrl, "/"), "/")
+	recipeTitle := urlSlice[len(urlSlice)-1]
 	createRecipeParams := db.CreateRecipeParams{
-		Title:        "test",
+		Title:        recipeTitle,
 		Servings:     int32(servingsInt),
 		ServingsType: recipe.servingsType,
 		CountryCode:  countryCode,
@@ -59,7 +91,16 @@ func FetchRecipe(recipeUrl string, data string, wg *sync.WaitGroup, queries *db.
 			Valid:  true,
 		},
 	}
-	queries.CreateRecipe(context.Background(), createRecipeParams)
+	recipeCreateRow, err := queries.CreateRecipe(context.Background(), createRecipeParams)
+	ingredientMap, err := getIngredientIdAmountMap(recipe.ingredients, queries)
+	for ingredientId, amount := range ingredientMap {
+		recipeIngredient := db.CreateRecipeIngredientParams{
+			RecipeID:     recipeCreateRow.ID,
+			IngredientID: ingredientId,
+			Amount:       IntToNumeric(amount),
+		}
+		queries.CreateRecipeIngredient(context.Background())
+	}
 	wg.Done()
 }
 

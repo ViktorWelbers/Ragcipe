@@ -107,3 +107,14 @@ func (q *Queries) CreateRecipeIngredient(ctx context.Context, arg CreateRecipeIn
 	err := row.Scan(&i.RecipeID, &i.IngredientID)
 	return i, err
 }
+
+const getIngredient = `-- name: GetIngredient :one
+SELECT id FROM ingredients WHERE name = $1
+`
+
+func (q *Queries) GetIngredient(ctx context.Context, name string) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getIngredient, name)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
