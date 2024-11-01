@@ -35,6 +35,6 @@ type Recipe struct {
 type RecipeIngredient struct {
 	RecipeID     pgtype.UUID
 	IngredientID pgtype.UUID
-	Amount       pgtype.Numeric
+	Amount       int32
 	Unit         pgtype.Text
 }

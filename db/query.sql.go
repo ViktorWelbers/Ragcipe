@@ -87,7 +87,7 @@ RETURNING recipe_id, ingredient_id
 type CreateRecipeIngredientParams struct {
 	RecipeID     pgtype.UUID
 	IngredientID pgtype.UUID
-	Amount       pgtype.Numeric
+	Amount       int32
 	Unit         pgtype.Text
 }
 

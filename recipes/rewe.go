@@ -3,6 +3,7 @@ package recipes
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"gorecipe/db"
 	"log"
@@ -27,30 +28,20 @@ type Recipe struct {
 	instructions []string
 }
 
-func IntToNumeric(amount int) pgtype.Numeric {
-	var numeric pgtype.Numeric
-	if err := numeric.Scan(amount); err != nil {
-		log.Panic(err)
-	}
-	return numeric
-}
-
 func getIngredientIdAmountMap(ingredients []Ingredient, queries *db.Queries) (map[pgtype.UUID]int, error) {
 	ingredientMap := map[pgtype.UUID]int{}
 	for _, ingredient := range ingredients {
 		id, err := queries.GetIngredient(context.Background(), ingredient.Name)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				id, err := queries.CreateIngredient(context.Background(), ingredient.Name)
-				if err != nil {
-					return nil, err
-				}
-				ingredientMap[id] = ingredient.Amount
-			} else {
+		if errors.Is(err, sql.ErrNoRows) {
+			id, _ := queries.CreateIngredient(context.Background(), ingredient.Name)
+			ingredientMap[id] = ingredient.Amount
+		} else {
+			if err != nil {
+				fmt.Println("Error getting ingredient:", err)
 				return nil, err
 			}
+			ingredientMap[id] = ingredient.Amount
 		}
-		ingredientMap[id] = ingredient.Amount
 	}
 	return ingredientMap, nil
 }
@@ -97,9 +88,16 @@ func FetchRecipe(recipeUrl string, data string, wg *sync.WaitGroup, queries *db.
 		recipeIngredient := db.CreateRecipeIngredientParams{
 			RecipeID:     recipeCreateRow.ID,
 			IngredientID: ingredientId,
-			Amount:       IntToNumeric(amount),
+			Amount:       int32(amount),
 		}
-		queries.CreateRecipeIngredient(context.Background())
+		queries.CreateRecipeIngredient(context.Background(), recipeIngredient)
+	}
+	for i, instruction := range recipe.instructions {
+		queries.CreateInstruction(context.Background(), db.CreateInstructionParams{
+			RecipeID:        recipeCreateRow.ID,
+			StepNumber:      int32(i),
+			InstructionText: instruction,
+		})
 	}
 	wg.Done()
 }
@@ -109,7 +107,7 @@ func (recipe *Recipe) extractInstructions(n *html.Node) error {
 		// Check if it has the text formatting classes that indicate an instruction div
 		isInstruction := false
 		for _, attr := range n.Attr {
-			if attr.Key == "class" && strings.Contains(attr.Val, "ld-rds mt- self-stretch text-sm leading-5 text-gray-1000 md:text-base lg:mt-6 lg:leading-6") {
+			if attr.Key == "class" && strings.Contains(attr.Val, "ld-rds m-") {
 				isInstruction = true
 				break
 			}
