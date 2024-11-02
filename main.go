@@ -37,7 +37,6 @@ func LinkEntryPoint(wg *sync.WaitGroup) {
 }
 
 func RecipeEntryPoint(wg *sync.WaitGroup, queries *db.Queries) {
-	sem := semaphore.NewWeighted(10)
 	file, err := os.Open("links.txt")
 	if err != nil {
 		log.Fatal(err)
@@ -45,16 +44,11 @@ func RecipeEntryPoint(wg *sync.WaitGroup, queries *db.Queries) {
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		if err := sem.Acquire(context.Background(), 1); err != nil {
-			log.Fatal(err)
-		}
 		link := scanner.Text()
-		wg.Add(1)
 		recipeFunc := func(s string) {
 			recipes.FetchRecipe(link, s, wg, queries)
 		}
-		go scrapeUrl(link, recipeFunc)
-		break
+		scrapeUrl(link, recipeFunc)
 	}
 }
 

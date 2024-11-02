@@ -107,7 +107,7 @@ func (recipe *Recipe) extractInstructions(n *html.Node) error {
 		// Check if it has the text formatting classes that indicate an instruction div
 		isInstruction := false
 		for _, attr := range n.Attr {
-			if attr.Key == "class" && strings.Contains(attr.Val, "ld-rds m-") {
+			if attr.Key == "class" && strings.Contains(attr.Val, "ld-rds") {
 				isInstruction = true
 				break
 			}
