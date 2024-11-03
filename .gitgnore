@@ -1,3 +1,5 @@
 .env
 qdrant_data/*
 /qdrant_data/*
+qdrant_data/raft_state.json
+qdrant_data/aliases/data.json
