@@ -1,16 +1,16 @@
 services:
-  postgres:
-    image: postgres:latest
-    container_name: postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: your_secure_password
-      POSTGRES_DB: mydatabase
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+  # postgres:
+  #   image: postgres:latest
+  #   container_name: postgres
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: your_secure_password
+  #     POSTGRES_DB: mydatabase
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
   qdrant:
     image: qdrant/qdrant
     container_name: qdrant
@@ -21,7 +21,7 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 volumes:
-  postgres_data:
-    name: postgres_data
+  # postgres_data:
+  #   name: postgres_data
   qdrant_data:
     name: qdrant_data

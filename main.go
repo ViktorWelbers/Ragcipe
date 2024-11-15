@@ -21,6 +21,7 @@ func LinkEntryPoint(wg *sync.WaitGroup) {
 	sem := semaphore.NewWeighted(10)
 	sum := 1
 	for sum < 100 {
+
 		if err := sem.Acquire(context.Background(), 1); err != nil {
 			log.Fatal(err)
 		}
@@ -36,7 +37,7 @@ func LinkEntryPoint(wg *sync.WaitGroup) {
 	}
 }
 
-func RecipeEntryPoint(wg *sync.WaitGroup, queries *db.Queries) {
+func RecipeEntryPoint(queries *db.Qdrant) {
 	file, err := os.Open("links.txt")
 	if err != nil {
 		log.Fatal(err)
@@ -46,7 +47,7 @@ func RecipeEntryPoint(wg *sync.WaitGroup, queries *db.Queries) {
 	for scanner.Scan() {
 		link := scanner.Text()
 		recipeFunc := func(s string) {
-			recipes.FetchRecipe(link, s, wg, queries)
+			recipes.FetchRecipe(link, s, queries)
 		}
 		scrapeUrl(link, recipeFunc)
 	}
@@ -60,6 +61,9 @@ func scrapeUrl(url string, dataExtractorFunc func(string)) {
 		ParseFunc: func(g *geziyor.Geziyor, r *client.Response) {
 			data := string(r.Body)
 			dataExtractorFunc(data)
+		},
+		ErrorFunc: func(g *geziyor.Geziyor, r *client.Request, err error) {
+			os.Exit(1)
 		},
 	}).Start()
 }
@@ -75,9 +79,12 @@ func setupDatabase() *db.Queries {
 
 func main() {
 	var wg sync.WaitGroup
-	queries := setupDatabase()
+	qdrant, err := db.NewClient()
+	if err != nil {
+		log.Fatal(err)
+	}
 	if _, err := os.Stat("links.txt"); err == nil {
-		RecipeEntryPoint(&wg, queries)
+		RecipeEntryPoint(qdrant)
 	} else if errors.Is(err, os.ErrNotExist) {
 		LinkEntryPoint(&wg)
 	} else {

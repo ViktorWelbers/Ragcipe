@@ -1,4 +1,4 @@
-package main
+package llm
 
 import (
 	"context"
@@ -54,7 +54,7 @@ func GenerateRecipe(data string) {
 	fmt.Println(response)
 }
 
-func CreateEmbeddings(text string) {
+func CreateEmbeddings(text string) []float64 {
 	client, err := api.ClientFromEnvironment()
 	if err != nil {
 		log.Fatal(err)
@@ -70,5 +70,5 @@ func CreateEmbeddings(text string) {
 		log.Fatal(err)
 	}
 
-	fmt.Println(resp.Embedding)
+	return resp.Embedding
 }

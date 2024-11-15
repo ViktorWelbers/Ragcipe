@@ -1,52 +1,29 @@
 package recipes
 
 import (
-	"context"
-	"database/sql"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"gorecipe/db"
+	"gorecipe/llm"
 	"log"
-	"net/url"
-	"strconv"
 	"strings"
-	"sync"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/net/html"
 )
 
 type Ingredient struct {
-	Name   string
-	Amount int
+	Name   string `json:"name"`
+	Amount string `json:"amount"`
 }
 
 type Recipe struct {
-	servings     string
-	servingsType string
-	ingredients  []Ingredient
-	instructions []string
+	Servings     string       `json:"servings"`
+	ServingsType string       `json:"servingsType"`
+	Ingredients  []Ingredient `json:"ingredients"`
+	Instructions []string     `json:"instructions"`
 }
 
-func getIngredientIdAmountMap(ingredients []Ingredient, queries *db.Queries) (map[pgtype.UUID]int, error) {
-	ingredientMap := map[pgtype.UUID]int{}
-	for _, ingredient := range ingredients {
-		id, err := queries.GetIngredient(context.Background(), ingredient.Name)
-		if errors.Is(err, sql.ErrNoRows) {
-			id, _ := queries.CreateIngredient(context.Background(), ingredient.Name)
-			ingredientMap[id] = ingredient.Amount
-		} else {
-			if err != nil {
-				fmt.Println("Error getting ingredient:", err)
-				return nil, err
-			}
-			ingredientMap[id] = ingredient.Amount
-		}
-	}
-	return ingredientMap, nil
-}
-
-func FetchRecipe(recipeUrl string, data string, wg *sync.WaitGroup, queries *db.Queries) {
+func FetchRecipe(recipeUrl string, data string, queries *db.Qdrant) {
 	n, err := html.Parse(strings.NewReader(data))
 	if err != nil {
 		log.Fatal(err)
@@ -57,49 +34,17 @@ func FetchRecipe(recipeUrl string, data string, wg *sync.WaitGroup, queries *db.
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(recipe)
-	servingsInt, err := strconv.Atoi(recipe.servings)
+	jsonRecipe, err := json.Marshal(recipe)
 	if err != nil {
-		log.Println("There was an error trying to convert servings:", recipe.servings)
-	}
-	rawUrl, err := url.Parse(recipeUrl)
-	if err != nil {
+		fmt.Println("error:", err)
 		return
 	}
-	host := rawUrl.Hostname()
-	splitHost := strings.Split(host, ".")
-	countryCode := splitHost[len(splitHost)-1]
-	urlSlice := strings.Split(strings.TrimSuffix(recipeUrl, "/"), "/")
-	recipeTitle := urlSlice[len(urlSlice)-1]
-	createRecipeParams := db.CreateRecipeParams{
-		Title:        recipeTitle,
-		Servings:     int32(servingsInt),
-		ServingsType: recipe.servingsType,
-		CountryCode:  countryCode,
-		HostUrl:      host,
-		OriginalUrl: pgtype.Text{
-			String: recipeUrl,
-			Valid:  true,
-		},
+	embeddingData := map[string]interface{}{
+		"recipe": string(jsonRecipe),
 	}
-	recipeCreateRow, err := queries.CreateRecipe(context.Background(), createRecipeParams)
-	ingredientMap, err := getIngredientIdAmountMap(recipe.ingredients, queries)
-	for ingredientId, amount := range ingredientMap {
-		recipeIngredient := db.CreateRecipeIngredientParams{
-			RecipeID:     recipeCreateRow.ID,
-			IngredientID: ingredientId,
-			Amount:       int32(amount),
-		}
-		queries.CreateRecipeIngredient(context.Background(), recipeIngredient)
-	}
-	for i, instruction := range recipe.instructions {
-		queries.CreateInstruction(context.Background(), db.CreateInstructionParams{
-			RecipeID:        recipeCreateRow.ID,
-			StepNumber:      int32(i),
-			InstructionText: instruction,
-		})
-	}
-	wg.Done()
+	embeddings := llm.CreateEmbeddings(string(jsonRecipe))
+	queries.InsertVector(embeddings, embeddingData)
+	fmt.Println(recipe)
 }
 
 func (recipe *Recipe) extractInstructions(n *html.Node) error {
@@ -119,7 +64,7 @@ func (recipe *Recipe) extractInstructions(n *html.Node) error {
 			if paragraphNode != nil {
 				instructionText := getTextContent(paragraphNode)
 				if instructionText != "" {
-					recipe.instructions = append(recipe.instructions, instructionText)
+					recipe.Instructions = append(recipe.Instructions, instructionText)
 				}
 			}
 		}
@@ -155,19 +100,16 @@ func (recipe *Recipe) extractIngredients(n *html.Node) error {
 			spanNode := findFirstChild(divNode, "span")
 			if spanNode != nil && spanNode.FirstChild != nil {
 				amountStr := spanNode.FirstChild.Data
-				amount, err := strconv.Atoi(amountStr)
-				if err == nil {
-					ingredient.Amount = amount
-					// Remove the amount from full text
-					fullText = strings.TrimPrefix(fullText, amountStr)
-				}
+				ingredient.Amount = amountStr
+				// Remove the amount from full text
+				fullText = strings.TrimPrefix(fullText, amountStr)
 			}
 
 			// Everything else is the ingredient name
 			ingredient.Name = strings.TrimSpace(fullText)
 
 			if ingredient.Name != "" {
-				recipe.ingredients = append(recipe.ingredients, ingredient)
+				recipe.Ingredients = append(recipe.Ingredients, ingredient)
 			}
 		}
 	}
@@ -192,11 +134,11 @@ func (recipe *Recipe) extractServings(n *html.Node) error {
 				// Find the servings amount span
 				servingsSpan := findFirstChild(middleSpan, "span")
 				if servingsSpan != nil {
-					recipe.servings = getTextContent(servingsSpan)
+					recipe.Servings = getTextContent(servingsSpan)
 
 					// Find the servings type in the next sibling
 					if servingsSpan.NextSibling != nil {
-						recipe.servingsType = getTextContent(servingsSpan.NextSibling)
+						recipe.ServingsType = getTextContent(servingsSpan.NextSibling)
 					}
 				}
 			}
