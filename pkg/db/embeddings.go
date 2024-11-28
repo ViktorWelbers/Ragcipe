@@ -2,7 +2,9 @@ package db
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/qdrant/go-client/qdrant"
 )
 
@@ -41,7 +43,7 @@ func (q *Qdrant) InsertVector(embedding []float64, embeddingData map[string]any)
 		CollectionName: "Recipes",
 		Points: []*qdrant.PointStruct{
 			{
-				Id:      qdrant.NewIDNum(1),
+				Id:      qdrant.NewID(uuid.New().String()),
 				Vectors: qdrant.NewVectors(embeddingVectors...),
 				Payload: qdrant.NewValueMap(embeddingData),
 			},
@@ -52,7 +54,7 @@ func (q *Qdrant) InsertVector(embedding []float64, embeddingData map[string]any)
 
 func (q *Qdrant) QueryVector(embedding []float64) ([]map[string]string, error) {
 	embeddingVectors := make([]float32, len(embedding))
-	limit := uint64(10)
+	limit := uint64(1)
 	for i, v := range embedding {
 		embeddingVectors[i] = float32(v)
 	}
@@ -65,7 +67,18 @@ func (q *Qdrant) QueryVector(embedding []float64) ([]map[string]string, error) {
 	recipes := []map[string]string{}
 	for _, result := range searchResults {
 		payload := make(map[string]string)
-		payload["recipe"] = result.Payload["recipe"].String()
+		fmt.Println(result.GetPayload())
+		recipes = append(recipes, payload)
 	}
 	return recipes, err
+}
+
+func (q *Qdrant) Test() {
+	res, _ := q.client.Scroll(context.Background(), &qdrant.ScrollPoints{
+		CollectionName: "Recipes",
+		Filter:         &qdrant.Filter{},
+		Limit:          qdrant.PtrOf(uint32(1000)),
+		WithPayload:    qdrant.NewWithPayload(true),
+	})
+	fmt.Println(len(res))
 }

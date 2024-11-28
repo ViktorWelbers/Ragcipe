@@ -3,8 +3,8 @@ package recipes
 import (
 	"encoding/json"
 	"fmt"
-	"gorecipe/db"
-	"gorecipe/llm"
+	"gorecipe/pkg/db"
+	"gorecipe/pkg/llm"
 	"log"
 	"strings"
 
@@ -17,6 +17,7 @@ type Ingredient struct {
 }
 
 type Recipe struct {
+	Name         string       `json:"name"`
 	Servings     string       `json:"servings"`
 	ServingsType string       `json:"servingsType"`
 	Ingredients  []Ingredient `json:"ingredients"`
@@ -28,22 +29,30 @@ func FetchRecipe(recipeUrl string, data string, queries *db.Qdrant) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	recipe := Recipe{}
 	err = recipe.parseRecipe(n)
 	if err != nil {
 		log.Fatal(err)
 	}
+	splitLink := strings.Split(recipeUrl, "/")
+	recipe.Name = splitLink[len(splitLink)-2]
 	jsonRecipe, err := json.Marshal(recipe)
 	if err != nil {
 		fmt.Println("error:", err)
 		return
 	}
-	embeddingData := map[string]interface{}{
-		"recipe": string(jsonRecipe),
+	embeddingData := make(map[string]interface{})
+	err = json.Unmarshal(jsonRecipe, &embeddingData)
+	if err != nil {
+		fmt.Println("error:", err)
+		return
 	}
 	embeddings := llm.CreateEmbeddings(string(jsonRecipe))
-	queries.InsertVector(embeddings, embeddingData)
+	res, err := queries.InsertVector(embeddings, embeddingData)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(res)
 	fmt.Println(recipe)
 }
 

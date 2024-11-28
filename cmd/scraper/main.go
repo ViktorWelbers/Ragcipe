@@ -5,9 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"gorecipe/db"
-	"gorecipe/links"
-	"gorecipe/recipes"
+	"gorecipe/pkg/db"
+	"gorecipe/pkg/links"
+	"gorecipe/pkg/recipes"
 	"log"
 	"os"
 	"sync"
@@ -66,15 +66,6 @@ func scrapeUrl(url string, dataExtractorFunc func(string)) {
 			os.Exit(1)
 		},
 	}).Start()
-}
-
-func setupDatabase() *db.Queries {
-	pool, err := db.PgxPool()
-	if err != nil {
-		panic(err)
-	}
-	queries := db.New(pool)
-	return queries
 }
 
 func main() {
