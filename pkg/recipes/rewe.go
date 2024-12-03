@@ -1,17 +1,30 @@
 package recipes
 
 import (
-	"database/sql"
+	"encoding/json"
 	"fmt"
+	"gorecipe/pkg/db"
+	"gorecipe/pkg/llm"
 	"log"
-	"strconv"
 	"strings"
-	"sync"
 
 	"golang.org/x/net/html"
 )
 
-func FetchRecipe(data string, wg *sync.WaitGroup, db *sql.DB) {
+type Ingredient struct {
+	Name   string `json:"name"`
+	Amount string `json:"amount"`
+}
+
+type Recipe struct {
+	Name         string       `json:"name"`
+	Servings     string       `json:"servings"`
+	ServingsType string       `json:"servingsType"`
+	Ingredients  []Ingredient `json:"ingredients"`
+	Instructions []string     `json:"instructions"`
+}
+
+func FetchRecipe(recipeUrl string, data string, queries *db.Qdrant) {
 	n, err := html.Parse(strings.NewReader(data))
 	if err != nil {
 		log.Fatal(err)
@@ -21,20 +34,26 @@ func FetchRecipe(data string, wg *sync.WaitGroup, db *sql.DB) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	splitLink := strings.Split(recipeUrl, "/")
+	recipe.Name = splitLink[len(splitLink)-2]
+	jsonRecipe, err := json.Marshal(recipe)
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	embeddingData := make(map[string]interface{})
+	err = json.Unmarshal(jsonRecipe, &embeddingData)
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	embeddings := llm.CreateEmbeddings(string(jsonRecipe))
+	res, err := queries.InsertVector(embeddings, embeddingData)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(res)
 	fmt.Println(recipe)
-	wg.Done()
-}
-
-type Ingredient struct {
-	Name   string
-	Amount int
-}
-
-type Recipe struct {
-	servings     string
-	servingsType string
-	ingredients  []Ingredient
-	instructions []string
 }
 
 func (recipe *Recipe) extractInstructions(n *html.Node) error {
@@ -42,7 +61,7 @@ func (recipe *Recipe) extractInstructions(n *html.Node) error {
 		// Check if it has the text formatting classes that indicate an instruction div
 		isInstruction := false
 		for _, attr := range n.Attr {
-			if attr.Key == "class" && strings.Contains(attr.Val, "ld-rds mt-4 self-stretch text-sm leading-5 text-gray-1000 md:text-base lg:mt-6 lg:leading-6") {
+			if attr.Key == "class" && strings.Contains(attr.Val, "ld-rds") {
 				isInstruction = true
 				break
 			}
@@ -54,7 +73,7 @@ func (recipe *Recipe) extractInstructions(n *html.Node) error {
 			if paragraphNode != nil {
 				instructionText := getTextContent(paragraphNode)
 				if instructionText != "" {
-					recipe.instructions = append(recipe.instructions, instructionText)
+					recipe.Instructions = append(recipe.Instructions, instructionText)
 				}
 			}
 		}
@@ -90,19 +109,16 @@ func (recipe *Recipe) extractIngredients(n *html.Node) error {
 			spanNode := findFirstChild(divNode, "span")
 			if spanNode != nil && spanNode.FirstChild != nil {
 				amountStr := spanNode.FirstChild.Data
-				amount, err := strconv.Atoi(amountStr)
-				if err == nil {
-					ingredient.Amount = amount
-					// Remove the amount from full text
-					fullText = strings.TrimPrefix(fullText, amountStr)
-				}
+				ingredient.Amount = amountStr
+				// Remove the amount from full text
+				fullText = strings.TrimPrefix(fullText, amountStr)
 			}
 
 			// Everything else is the ingredient name
 			ingredient.Name = strings.TrimSpace(fullText)
 
 			if ingredient.Name != "" {
-				recipe.ingredients = append(recipe.ingredients, ingredient)
+				recipe.Ingredients = append(recipe.Ingredients, ingredient)
 			}
 		}
 	}
@@ -127,11 +143,11 @@ func (recipe *Recipe) extractServings(n *html.Node) error {
 				// Find the servings amount span
 				servingsSpan := findFirstChild(middleSpan, "span")
 				if servingsSpan != nil {
-					recipe.servings = getTextContent(servingsSpan)
+					recipe.Servings = getTextContent(servingsSpan)
 
 					// Find the servings type in the next sibling
 					if servingsSpan.NextSibling != nil {
-						recipe.servingsType = getTextContent(servingsSpan.NextSibling)
+						recipe.ServingsType = getTextContent(servingsSpan.NextSibling)
 					}
 				}
 			}
