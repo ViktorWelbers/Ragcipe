@@ -17,7 +17,7 @@ This Golang project provides a comprehensive solution for scraping, embedding, a
 - **Scraping**: Custom web scraping implementation
 - **Embedding**: Ollama 
 - **Vector Database**: Qdrant
-- **CLI**: Custom CLI tool with recipe search functionality
+- **CLI**: Custom CLI tool with recipe search functionality (TBD)
 
 ## Installation
 
@@ -41,14 +41,6 @@ go build
 1. **Scraper**: Extracts recipe data from REWE.com
 2. **Embedder**: Generates vector representations using Ollama
 4. **CLI**: Provides interface for searching and managing recipes (TBD)
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
 
 ## License
 
