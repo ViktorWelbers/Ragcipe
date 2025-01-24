@@ -2,7 +2,7 @@
 
 ## Overview
 
-This Golang project provides a comprehensive solution for scraping, embedding, and querying recipes from REWE.com using advanced vector search technologies.
+This Golang project provides a comprehensive solution for scraping, embedding, and querying recipes from REWE.com.
 
 ## Features
 
