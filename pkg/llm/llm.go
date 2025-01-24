@@ -27,10 +27,6 @@ func GenerateRecipe(data string) {
 			Role:    "assistant",
 			Content: "{ \"recipe\": \"chicken curry\", \"ingredients\": [\"chicken\", \"curry powder\", \"onion\", \"garlic\", \"ginger\", \"tomato\", \"coconut milk\"]}",
 		},
-		{
-			Role:    "user",
-			Content: "I would like a meal for another day. Please provide me with a recipe that uses lentils.",
-		},
 	}
 	stream := false
 	req := &api.ChatRequest{
