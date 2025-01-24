@@ -35,26 +35,12 @@ go mod download
 go build
 ```
 
-## Usage
-
-### Scraping Recipes
-```bash
-# Scrape recipes from REWE
-./recipe-scraper scrape
-```
-
-### Querying Recipes
-```bash
-# Search for recipes (returns 3-5 matching recipes)
-./recipe-scraper search "vegetarian pasta"
-```
 
 ## Project Architecture
 
 1. **Scraper**: Extracts recipe data from REWE.com
 2. **Embedder**: Generates vector representations using Ollama
-3. **Indexer**: Stores embeddings in Qdrant vector database
-4. **CLI**: Provides interface for searching and managing recipes
+4. **CLI**: Provides interface for searching and managing recipes (TBD)
 
 ## Contributing
 
